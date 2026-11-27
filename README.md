@@ -72,11 +72,11 @@ The verifier builds and installs the gem into a temporary directory, boots a Rai
 
 ## Releases
 
-Open **Actions → Publish gem to RubyGems → Run workflow**. Select the target from **Next version** (for example, `patch → 0.1.3`). Leave **Publish to RubyGems** unchecked to build and test the package. To publish it, select `main` and check the box.
+Open **Actions → Publish gem to RubyGems → Run workflow**. Choose **patch**, **minor** or **major** under **Version increment**. The workflow calculates the target from the version in the selected branch. Leave **Publish to RubyGems** unchecked to build and test the package. To publish it, select `main` and check the box.
 
-After publishing, the workflow tags the source and opens a version update PR. From a current checkout, run the command in that PR (for example, `bin/refresh-release-form 0.1.3`). It uses your GitHub CLI login to update the three dropdown choices on the PR branch. Merge the PR before starting the next release.
+After publishing, the workflow tags the source, opens a PR to record the version on `main` and starts the required **All request tests passed** check on that PR. Merge the PR before the next release.
 
-The required **All request tests passed** check verifies the published tag, version change, and generated choices for a version update. Other changes and release candidates run the full compatibility matrix. If recording the release fails after upload, rerun the failed jobs in the original run.
+For a version-only update, CI verifies the tag, the version change and the published RubyGems version. Other changes and release candidates run the full compatibility matrix. If recording the release fails after upload, rerun the failed jobs in the original run.
 
 Each published tag has a [GitHub Release](https://github.com/feed-mob/request-rescue/releases) with release notes, the verified gem and its SHA-256, and source code archives in ZIP and tar.gz formats. To include a short user-facing summary, add a `## X.Y.Z` section to `CHANGELOG.md` before starting the release. GitHub also generates notes from merged pull requests.
 
