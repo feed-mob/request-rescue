@@ -1,38 +1,32 @@
-# Request Rescue 开源计划
+# Request Rescue release plan
 
-拟发布一个 gem `request-rescue`，为 Rails 应用处理异常请求和错误页面。首版目标是让使用方在现有 Ruby、Rails 和 Rack 版本上安装、验证和回滚。
+Package `request-rescue` as a Ruby gem for handling malformed Rails requests and rendering error pages. The first release should let applications migrate from `feedmob-rescue 0.1.7`, verify their responses, and roll back on their existing Ruby, Rails, and Rack versions.
 
-## 兼容目标
+## Compatibility targets
 
-首版以 19 个未归档下游仓库的默认分支为准。这些项目均锁定 `feedmob-rescue 0.1.7`，共使用 7 组 Ruby / Rails 补丁版本。下表是端到端测试目标。
+The default branches of 19 non-archived downstream repositories pin `feedmob-rescue 0.1.7`. Their lockfiles give us seven Ruby/Rails pairs. Accounting for the different Rack versions gives us nine combinations to verify.
 
-| Ruby | Rails | 使用方锁定的 Rack | 项目数 |
+| Ruby | Rails | Rack versions in downstream lockfiles | Projects |
 | --- | --- | --- | ---: |
 | 3.0.3 | 6.1.5 | 2.2.4 | 1 |
 | 3.1.3 | 6.1.5 | 2.2.3 | 1 |
 | 3.1.3 | 6.1.7.6 | 2.2.8 | 4 |
-| 3.1.4 | 6.1.7.6 | 2.2.8、2.2.9、2.2.21 | 10 |
+| 3.1.4 | 6.1.7.6 | 2.2.8, 2.2.9, 2.2.21 | 10 |
 | 3.1.6 | 6.1.7.6 | 2.2.8 | 1 |
 | 3.2.9 | 6.1.7.6 | 2.2.9 | 1 |
 | 3.2.2 | 7.1.3.4 | 3.1.7 | 1 |
 
-另有一个使用方正在升级到 Ruby 3.1.4 / Rails 6.1.7.10，待 PR 合入后更新矩阵。
+One downstream application has proposed upgrading to Ruby 3.1.4 and Rails 6.1.7.10. Update the matrix when that change lands on its default branch.
 
-## 实施顺序
+## Implementation and acceptance
 
-1. **先固定兼容契约。** 用最小 Rails 宿主重现正常请求、无法识别的 HTTP 方法、无效查询参数、缺失模板和未知格式、Apipie 参数校验、跨源脚本请求以及异常页本身。记录状态码、Content-Type、响应体、重定向和开发环境的异常传播。以旧版 0.1.7 的实际响应作为迁移对照。
-2. **实现一个 gem，按宿主加载。** Rack 中间件负责请求方法和参数。Rails 集成负责 controller concern、可挂载的错误页和 `exceptions_app`。将 Apipie 做成可选适配器。针对新接入的应用直接返回对应错误状态，保留显式的迁移模式来复现旧应用依赖的重定向和响应。验证 HTML、API-only 宿主和自定义挂载路径。错误页使用相对链接；只处理约定的异常，交给下游的正常响应原样返回。
-3. **从构建出的 gem 做端到端验收。** 先跑 Ruby 3.0.3 / Rails 6.1.5、Ruby 3.1.4 / Rails 6.1.7.6 和 Ruby 3.2.2 / Rails 7.1.3.4，尽早发现装包、启动和中间件顺序的问题。发布前跑完整的使用方组合，并覆盖同组内锁定的不同 Rack 版本，旧 Ruby 在固定工具链的容器中执行。记录 gem 校验和、锁定版本、运行命令和 HTTP 断言结果。迁移演练检查现有应用可以换入该 gem，避免引入额外的框架升级。
-4. **准备 RubyGems 首发。** 建议版本 `0.1.0`。使用干净仓库和明确的打包文件清单，保留复用代码的 MIT 版权声明，重写安装文档和示例。补齐 gemspec 的源码、更新日志及发布地址，检查实际包内容，在隔离环境按 README 装包。兼容矩阵通过、名称复核后，可配置 RubyGems pending trusted publisher，通过 GitHub Actions OIDC 从 release tag 发布。[RubyGems 发布指南](https://guides.rubygems.org/publishing/) · [Trusted Publishing](https://guides.rubygems.org/trusted-publishing/)
+1. **Capture the migration baseline.** Send requests through a minimal Rails application running `feedmob-rescue 0.1.7`. Record the status, content type, body, redirect location, and exceptions that propagate in development. Cover successful requests, unrecognized methods, malformed queries, unsupported formats, missing templates, invalid cross-origin script requests, Apipie parameter errors, and requests to the error pages themselves.
+2. **Implement the gem.** Use Rack middleware to validate methods and query parameters. Provide a Rails controller concern, a mountable error-page engine, and an optional `exceptions_app`. Handle Apipie errors when the host loads Apipie. Return error statuses directly by default and offer an explicit migration mode for legacy redirects and responses. Use relative links on error pages, handle only the specified exceptions, and pass successful responses through unchanged.
+3. **Test the installed package.** Build the gem from its gemspec and boot the test host from the installed package. Start with Ruby 3.0.3 / Rails 6.1.5, Ruby 3.1.4 / Rails 6.1.7.6, and Ruby 3.2.2 / Rails 7.1.3.4. Exercise real routes, controllers, and exception middleware in HTML and API-only applications. Check 400, 403, 404, 405, 422, and 500 responses, HEAD requests, JSON, and redirects at both root and custom mount paths. Before release, run every row and Rack version in the matrix, including hosts with and without Apipie. Use a container with a pinned toolchain where needed. Save the package checksum, dependency lockfile, verification command, and request results. Rehearse migration in an existing application on its current framework versions.
+4. **Prepare the RubyGems release.** Target version `0.1.0`. Start from a clean repository, list the files to package, retain the MIT notice for reused code, and write public installation and migration examples in English. Set the source, changelog, and publishing URLs in the gemspec. Inspect the built package and follow the README installation steps in an isolated environment. Once the matrix passes and the gem name is confirmed, configure a pending trusted publisher so GitHub Actions can publish from a release tag using OIDC. [RubyGems publishing guide](https://guides.rubygems.org/publishing/) · [Trusted Publishing](https://guides.rubygems.org/trusted-publishing/)
 
-## 开发与验收
+## Release candidate verification
 
-1. 先写可运行的 Rails 请求验收。用真实路由、控制器和异常中间件检查正常请求、400/403/404/405/422/500、HEAD、JSON、开发环境传播、Apipie 可选加载，以及迁移模式的重定向。用本地旧 gem 对照迁移行为。
-2. 实现 gem 入口、请求中间件、控制器 concern、错误页 Engine 和可选的 exceptions_app。让宿主显式启用旧行为，验证根路径和自定义挂载路径。
-3. 从 gemspec 构建安装包，用打包内容启动宿主。7 组 Ruby / Rails 组合展开为 9 组精确的 Ruby / Rails / Rack 组合，逐组保存版本、校验和与请求结果，再补齐英文安装、迁移和复验说明。
+On November 27, 2026, all nine Ruby/Rails/Rack combinations passed locally using the same `0.1.0` package. Across Apipie versions and a host without Apipie, 11 environments passed 737 request assertions. The migration baseline also ran against the old gem on Rails 6.1.7.6. The local report is in `pkg/verification.md`.
 
-## 0.1.0 本地验收结果
-
-2026-11-27，已构建首版候选包。9 组 Ruby / Rails / Rack 均使用同一份安装包通过端到端验证。将 Apipie 各版本和无 Apipie 的宿主分别计算，共 11 个环境、737 项请求断言。旧版 0.1.7 的迁移对照已在 Rails 6.1.7.6 上运行。GitHub Actions 已配置相同矩阵。
-
-本地验收报告位于 `pkg/verification.md`。应用级试迁移、远端 CI 和 RubyGems 首发仍待执行。
+GitHub Actions runs the same matrix. On the initial commit, 10 jobs passed. The Rails 7.1.3.4 job with Apipie 1.4.0 returned HTTP 500 on its first request. A passing CI run, a migration trial in a downstream application, and publication to RubyGems are still pending. [Initial CI run](https://github.com/feed-mob/request-rescue/actions/runs/45925696603)
