@@ -3,7 +3,8 @@ module RequestRescue
     extend ActiveSupport::Concern
 
     included do
-      rescue_from ActionController::UnknownFormat, ActionView::MissingTemplate, with: :request_rescue_not_found
+      rescue_from ActionController::UnknownFormat, with: :request_rescue_not_found
+      rescue_from ActionView::MissingTemplate, with: :request_rescue_missing_template
       rescue_from ActionController::InvalidCrossOriginRequest, with: :request_rescue_cross_origin
       # Rails resolves string class names when handling an exception, so Apipie is optional.
       rescue_from "Apipie::ParamMissing", "Apipie::ParamInvalid", with: :request_rescue_invalid_params
@@ -16,6 +17,24 @@ module RequestRescue
       return redirect_to(request_rescue.not_found_path) if Rails.application.config.request_rescue.legacy_responses
 
       request_rescue_render(404)
+    end
+
+    def request_rescue_missing_template(error)
+      raise error if Rails.env.development?
+      return redirect_to(request_rescue.not_found_path) if Rails.application.config.request_rescue.legacy_responses
+      # A template that exists in another format means the client asked for an unsupported one.
+      # Otherwise the template is missing, so let the application report a 500.
+      raise error unless request_rescue_other_format?(error)
+
+      request_rescue_render(404)
+    end
+
+    def request_rescue_other_format?(error)
+      return false unless respond_to?(:lookup_context, true) && error.path.present?
+      return false if error.respond_to?(:partial) && error.partial
+
+      prefixes = error.path.include?("/") ? [] : _prefixes
+      lookup_context.any_templates?(error.path, prefixes)
     end
 
     def request_rescue_invalid_params(error)

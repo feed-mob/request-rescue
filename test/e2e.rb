@@ -24,6 +24,19 @@ end
 target = Gem.loaded_specs.fetch(ENV.fetch("TEST_GEM"))
 raise "Unexpected gem source" unless File.realpath(target.full_gem_path) == File.realpath(ENV.fetch("TEST_GEM_PATH"))
 
+# Stands in for middleware the application adds, such as Rack::Attack.
+class HostMiddleware
+  def initialize(app)
+    @app = app
+  end
+
+  def call(env)
+    status, headers, body = @app.call(env)
+    headers["x-host-middleware"] = "seen"
+    [status, headers, body]
+  end
+end
+
 class ProbeApp < Rails::Application
   config.root = File.expand_path("host", __dir__)
   config.secret_key_base = "request-rescue-local-test-" * 4
@@ -32,6 +45,7 @@ class ProbeApp < Rails::Application
   config.consider_all_requests_local = false
   config.logger = Logger.new(File::NULL)
   config.hosts.clear
+  config.middleware.use HostMiddleware
   config.active_support.deprecation = :stderr
   config.active_support.cache_format_version = 7.1 if Rails.gem_version >= Gem::Version.new("7.1")
   config.action_dispatch.show_exceptions = if Rails.gem_version >= Gem::Version.new("7.1")
@@ -72,6 +86,9 @@ end
 legacy = ENV["LEGACY"] == "yes" || baseline
 prefix = ENV.fetch("MOUNT_AT").sub(%r{/\z}, "")
 json = { "HTTP_ACCEPT" => "application/json" }
+# Both gems reject malformed requests before the Rails logger and application middleware.
+rejected = ->(r) { r["x-host-middleware"].nil? }
+check.call("GET", "/ok", 200) { |r| r["x-host-middleware"] == "seen" }
 check.call("GET", "/ok?value=hello", 200) { |r| JSON.parse(r.body)["value"] == "hello" }
 check.call("HEAD", "/ok", 200) { |r| r.body.empty? }
 check.call("POST", "/echo", 200, "CONTENT_TYPE" => "application/json", :input => '{"value":"posted"}') do |r|
@@ -83,6 +100,7 @@ if Rails.env.development? || Rails.env.test?
   if Rails.env.development?
     expect_error.call("/format.xml", ActionController::UnknownFormat)
     expect_error.call("/template", ActionView::MissingTemplate)
+    expect_error.call("/listing.csv", ActionView::MissingTemplate)
     if defined?(Apipie)
       expect_error.call("/params", Apipie::ParamMissing)
       expect_error.call("/params?number=no", Apipie::ParamInvalid)
@@ -91,7 +109,7 @@ if Rails.env.development? || Rails.env.test?
 end
 if legacy && !Rails.env.development?
   check.call("GET", "/script", 200) { |r| r.body.empty? } unless Rails.env.test?
-  %w[/format.xml /template].each do |path|
+  %w[/format.xml /template /listing.csv].each do |path|
     check.call("GET", path, 302) { |r| URI(r["location"]).path == "#{prefix}/not_found" }
   end
   if defined?(Apipie)
@@ -104,7 +122,8 @@ if legacy && !Rails.env.development?
   check.call("POST", "#{prefix}/404", 200) { |r| r.body.include?("404") }
   check.call("PUT", "#{prefix}/500", 200) { |r| r.body.include?("500") }
   check.call("HEAD", "#{prefix}/500", 200) { |r| r.body.empty? }
-  check.call("GET", "#{prefix}/not_found?value=%FF", 400)
+  check.call("GET", "#{prefix}/not_found?value=%FF", 400, &rejected)
+  check.call("UNRECOGNIZED", "#{prefix}/not_found?value=%FF", 400, &rejected)
   check.call("GET", "#{prefix}/not_found?items[][name]=%FF", 400)
   check.call("GET", "#{prefix}/not_found?value=%E2%9C%93", 200)
   # Controllers still redirect JSON requests, but feedmob-rescue 0.1.7 also redirected
@@ -146,7 +165,17 @@ elsif Rails.env.production?
     check.call("GET", "/absent", 404) { |r| r["content-type"].include?("application/json") }
   else
     check.call("GET", "/format.xml", 404) { |r| r["content-type"].include?("text/html") && r.body.include?("404") }
-    check.call("GET", "/template", 404)
+    # Only a template that exists in another format is treated as an unsupported format.
+    check.call("GET", "/listing", 200) { |r| r.body.include?("listing") }
+    check.call("GET", "/listing.csv", 404) { |r| r["content-type"].include?("text/html") }
+    check.call("GET", "/listing.json", 404) { |r| JSON.parse(r.body) == { "errors" => ["Page not found"] } }
+    check.call("GET", "/template", 500) { |r| !r.body.include?("probe/absent") }
+    # Route defaults and the format parameter choose JSON without an Accept header.
+    json_error = ->(r) { r["content-type"].start_with?("application/json") && JSON.parse(r.body).key?("errors") }
+    check.call("GET", "/api/format", 404, "HTTP_ACCEPT" => "*/*", &json_error)
+    check.call("GET", "/format?format=json", 404, &json_error)
+    check.call("GET", "/format.xml", 404, "HTTP_ACCEPT" => "application/json, text/plain, */*", &json_error)
+    check.call("GET", "/api/fault", 500, "HTTP_ACCEPT" => "*/*", &json_error)
   end
   if defined?(Apipie)
     check.call("GET", "/params", 422, json) { |r| JSON.parse(r.body).key?("errors") }
@@ -164,9 +193,12 @@ if Rails.env.production?
     check.call("GET", "/javascript", legacy ? 200 : 403) { |r| legacy ? r.body.empty? : !r.body.include?("void(0)") }
     check.call("GET", "/javascript", 200, "HTTP_X_REQUESTED_WITH" => "XMLHttpRequest") { |r| r.body.include?("void(0)") }
   end
-  check.call("UNRECOGNIZED", "/ok", 405) { |r| JSON.parse(r.body) == { "errors" => ["Method not allowed"] } }
+  check.call("UNRECOGNIZED", "/ok", 405) do |r|
+    JSON.parse(r.body) == { "errors" => ["Method not allowed"] } && rejected.call(r)
+  end
   unless baseline
-    check.call("GET", "/ok?value=1&value[]=2", 400)
+    check.call("GET", "/ok?value=1&value[]=2", 400, &rejected)
+    check.call("UNRECOGNIZED", "/ok?value=1&value[]=2", 400, &rejected)
     check.call("GET", "/ok?value=%FF", 400)
     check.call("GET", "/ok?value[]=one&value[]=two", 200) { |r| JSON.parse(r.body)["value"] == %w[one two] }
     check.call("HEAD", "/ok?value=1&value[]=2", 400) { |r| r.body.empty? }

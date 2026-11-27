@@ -35,12 +35,15 @@ config.exceptions_app = RequestRescue::ExceptionsApp
 | --- | --- | --- |
 | Conflicting nested query parameter types | 400 | 400 |
 | HTTP method unrecognized by Rails | 405 JSON | 405 JSON with `{"errors":["Method not allowed"]}` |
-| Unsupported controller format or missing template | 404 | 302 to the mounted `not_found` page |
+| Unsupported controller format, including a template that exists only in other formats | 404 | 302 to the mounted `not_found` page |
+| Template missing in every format | Raised, so Rails returns 500 | 302 to the mounted `not_found` page |
 | Invalid cross-origin JavaScript request | 403 | Empty 200 |
 | Missing or invalid Apipie parameter | 422 | 302 to the mounted `invalid_params` page |
 | Mounted `/not_found`, `/invalid_params`, `/404`, `/500` | 404, 422, 404, 500 respectively | 200 with the corresponding error page |
 
-HTML applications render error pages by default. Clients can request JSON with `Accept: application/json`. API-only applications default to JSON. HEAD requests return the status and headers with an empty body. The middleware is installed automatically. Apipie integration is available when the host loads `apipie-rails`.
+HTML applications render error pages by default. Clients can request JSON with a `.json` path, a `format` parameter, a route's format default or `Accept: application/json`. API-only applications default to JSON. HEAD requests return the status and headers with an empty body. Apipie integration is available when the host loads `apipie-rails`.
+
+The middleware is installed automatically after `ActionDispatch::RemoteIp`, where feedmob-rescue checked requests. Malformed queries and unrecognized methods are rejected before the Rails request log and any middleware the application adds.
 
 Development re-raises handled controller exceptions for debugging. Cross-origin script exceptions also propagate in the test environment.
 
@@ -56,12 +59,11 @@ With `self.routes`, a routing miss or an application exception renders the 404 o
 Check these differences when testing a migration.
 
 - The old error pages redirected requests that accept JSON to `/not_found`, including requests for `/not_found` itself, so a client following redirects never got a response. With `exceptions_app = self.routes`, routing misses, `.json` paths and application exceptions did the same. In migration mode the new pages answer these requests with status 200 and a JSON body such as `{"errors":["Page not found"]}`. Controller redirects for unsupported formats and Apipie errors still apply to JSON requests.
-
 - The old engine rendered ERB views through the host's `ApplicationController`. The new engine serves standalone Rack responses. Check any error-page branding, layout overrides or controller callbacks your application relies on.
 - Migration mode validates the encoding of query values before routing. In version 0.1.3, a mounted page that ignores its query can return 200 for invalid UTF-8. See the [changelog](CHANGELOG.md) for the correction. With migration mode off, Rails can apply per-action parameter encodings.
 - The new middleware returns 400 for conflicting nested parameter types. On the Rails 6.1 migration baseline the old middleware let the Rack parsing exception propagate. The new method check also requires the verb casing Rails recognizes.
 
-Before switching a production application, exercise its error routes, an Apipie endpoint if applicable, and any clients that follow redirects. Once clients can consume direct 404, 403 and 422 responses, disable migration mode. To roll back, restore the old gem and lockfile, concern, engine and exception app together.
+Before switching a production application, exercise its error routes, an Apipie endpoint if applicable, and any clients that follow redirects. Once clients can consume direct 404, 403 and 422 responses, disable migration mode. Without migration mode, a template that is missing in every format raises and reaches your error reporting as a 500. To roll back, restore the old gem and lockfile, concern, engine and exception app together.
 
 ## Verify a package locally
 
