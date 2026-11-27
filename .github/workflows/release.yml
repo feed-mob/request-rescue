@@ -98,6 +98,13 @@ jobs:
       - uses: ruby/setup-ruby@v1
         with:
           ruby-version: "3.2.9"
+      - name: Verify the release App installation before publishing
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
+        with:
+          client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          permission-contents: read
+          permission-pull-requests: write
       - name: Check the published checksum on retry
         id: registry
         run: |
@@ -123,19 +130,26 @@ jobs:
   record:
     if: inputs.publish && github.ref == 'refs/heads/main'
     needs: [prepare, publish]
+    environment: release
     runs-on: ubuntu-22.04
     permissions:
       contents: write
-      pull-requests: write
-      actions: write
     steps:
       - uses: actions/checkout@v4
       - uses: ruby/setup-ruby@v1
         with:
           ruby-version: "3.2.9"
+      - name: Get a release App token for the version PR
+        id: release-app
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
+        with:
+          client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          permission-contents: read
+          permission-pull-requests: write
       - name: Tag the released source and open its version update
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.release-app.outputs.token }}
           VERSION: ${{ needs.prepare.outputs.version }}
         run: bash bin/record-release
 
