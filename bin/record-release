@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-test "$(ruby bin/prepare-release)" = "$VERSION"
+test "$(ruby bin/prepare-release "$BUMP")" = "$VERSION"
 tag="v$VERSION"
 branch="release/$tag"
 
@@ -12,7 +12,7 @@ git add lib/request_rescue/version.rb
 git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
   commit -m "release: Record $tag"
 
-state=$(gh pr list --base main --head "$branch" --state all --json state --jq '.[0].state // empty')
+state=$(gh pr list --base main --head "$branch" --state all --json state,isCrossRepository --jq '[.[] | select(.isCrossRepository == false)][0].state // empty')
 case "$state" in
   OPEN|MERGED) git push origin "HEAD:refs/tags/$tag" ;;
   CLOSED) echo "The version update PR for $tag was closed. Reopen it to resume." >&2; exit 1 ;;
@@ -26,3 +26,14 @@ EOF
     ;;
   *) echo "Unexpected PR state: $state" >&2; exit 1 ;;
 esac
+
+# Bot-created PRs can require approval for the pull_request event. Dispatch CI
+# on the version branch so GitHub records the required check on its head SHA.
+if [[ "$state" != MERGED ]]; then
+  head=$(gh pr view "$branch" --json headRefOid --jq .headRefOid)
+  started=$(gh run list --workflow verify.yml --event workflow_dispatch --branch "$branch" \
+    --commit "$head" --limit 1 --json databaseId --jq '.[0].databaseId // empty')
+  if [[ -z "$started" ]]; then
+    gh workflow run verify.yml --ref "$branch"
+  fi
+fi

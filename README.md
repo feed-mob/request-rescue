@@ -65,9 +65,11 @@ The verifier builds and installs the gem into a temporary directory, boots a Rai
 
 Every pull request runs the compatibility matrix. The **All request tests passed** check is required to merge.
 
-To publish, open **Actions → Publish gem to RubyGems → Run workflow**, select `main`, and click **Run workflow**. The workflow builds the next patch version (for example, `0.1.0` → `0.1.1`), tests the same gem across the full matrix, and pushes it to RubyGems using trusted publishing.
+To publish, open **Actions → Publish gem to RubyGems → Run workflow**, select `main`, choose the version increment, and click **Run workflow**. Starting from `0.1.1`, choose `patch` for a fix (`0.1.2`), `minor` for a backward-compatible feature (`0.2.0`), or `major` for a breaking change (`1.0.0`). The workflow builds the selected version, tests the same gem across the full matrix, and pushes it to RubyGems using trusted publishing.
 
-After RubyGems accepts the package, the workflow tags the versioned source commit (for example, `v0.1.1`) and opens a PR to bring that commit into `main`. Approve the PR's CI run if GitHub prompts, then merge the version update before starting the next release. If recording the release fails after upload, rerun the failed jobs in the original run. When the publish job is retried, it checks the published SHA-256 against the tested package before proceeding.
+After RubyGems accepts the package, the workflow tags the versioned source commit (for example, `v0.1.1`) and opens a PR to bring that commit into `main`. The workflow starts CI on the version branch automatically. Merge the version update before starting the next release. If recording the release fails after upload, rerun the failed jobs in the original run. When the publish job is retried, it checks the published SHA-256 against the tested package before proceeding.
+
+Each published tag has a [GitHub Release](https://github.com/feed-mob/request-rescue/releases) with release notes, the verified gem and its SHA-256, and source code archives in ZIP and tar.gz formats. To include a short user-facing summary, add a `## X.Y.Z` section to `CHANGELOG.md` before starting the release. GitHub also generates notes from merged pull requests.
 
 ## License
 
