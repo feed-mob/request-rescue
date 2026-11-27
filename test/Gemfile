@@ -4,3 +4,6 @@ gem "railties", ENV.fetch("RAILS_VERSION")
 gem "rack", ENV.fetch("RACK_VERSION")
 gem ENV.fetch("TEST_GEM"), path: ENV.fetch("TEST_GEM_PATH")
 gem "apipie-rails", ENV["APIPIE_VERSION"] if ENV["APIPIE_VERSION"]
+
+# Apipie 1.4.0 uses the positional RDoc formatter API. Match the downstream lockfile.
+gem "rdoc", "6.7.0" if ENV["APIPIE_VERSION"] == "1.4.0"
