@@ -5,6 +5,11 @@ class ProbeController < ApplicationController
     def javascript
       render js: "void(0)"
     end
+
+    # The template exists only as HTML, so other formats raise ActionView::MissingTemplate.
+    def listing
+      render locals: { page: "listing" }
+    end
   end
 
   def ok

@@ -33,6 +33,9 @@ module RequestRescue
     private
 
     def json_request?(env)
+      format = explicit_format(env)
+      return format == "json" if %w[json html].include?(format)
+
       path = env["action_dispatch.original_path"] || env["PATH_INFO"]
       return true if path.to_s.end_with?(".json")
 
@@ -41,6 +44,15 @@ module RequestRescue
       preference ? preference == Mime[:json] : Rails.application.config.api_only
     rescue ActionDispatch::Http::MimeNegotiation::InvalidType
       Rails.application.config.api_only
+    end
+
+    # Route defaults and the format parameter take precedence, as they do in controllers.
+    def explicit_format(env)
+      format = env["action_dispatch.request.path_parameters"]&.fetch(:format, nil)
+      format ||= Rack::Request.new(env).GET["format"]
+      format.to_s if format.is_a?(String) || format.is_a?(Symbol)
+    rescue Rack::QueryParser::ParameterTypeError, Rack::QueryParser::InvalidParameterError, RangeError
+      nil
     end
   end
 
