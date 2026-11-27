@@ -22,6 +22,7 @@ case "$state" in
 ## Summary
 
 - Update the gem version to [$VERSION](https://rubygems.org/gems/request-rescue/versions/$VERSION).
+- Select **Approve workflows to run** to start the required PR check, then merge once it passes.
 EOF
     ;;
   *) echo "Unexpected PR state: $state" >&2; exit 1 ;;
