@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-test "$(ruby bin/prepare-release "$BUMP" "${CUSTOM_VERSION:-}")" = "$VERSION"
+test "$(ruby bin/prepare-release "$BUMP")" = "$VERSION"
 tag="v$VERSION"
 branch="release/$tag"
 
@@ -22,21 +22,8 @@ case "$state" in
 ## Summary
 
 - Update the gem version to [$VERSION](https://rubygems.org/gems/request-rescue/versions/$VERSION).
+- Before merging, run \`bin/refresh-release-form $VERSION\` from a current checkout to update the version choices on this PR.
 EOF
     ;;
   *) echo "Unexpected PR state: $state" >&2; exit 1 ;;
 esac
-
-# The generated commit skips the PR event. Dispatch its required check once.
-# Subsequent edits to the PR run normal pull request CI.
-if [[ "$state" != MERGED ]]; then
-  head=$(gh pr view "$branch" --json headRefOid --jq .headRefOid)
-  if [[ "$head" != "$(git rev-parse HEAD)" ]]; then
-    exit 0
-  fi
-  started=$(gh run list --workflow verify.yml --event workflow_dispatch --branch "$branch" \
-    --commit "$head" --limit 1 --json databaseId --jq '.[0].databaseId // empty')
-  if [[ -z "$started" ]]; then
-    gh workflow run verify.yml --ref "$branch"
-  fi
-fi

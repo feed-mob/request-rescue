@@ -63,19 +63,11 @@ The verifier builds and installs the gem into a temporary directory, boots a Rai
 
 ## Releases
 
-Every pull request requires the **All request tests passed** check. Ordinary changes run the full compatibility matrix. For an automated version update, CI checks that the commit matches the published tag, has the current `main` as its sole parent, and changes only the version number to the value published on RubyGems. Other changes run the full matrix.
+Open **Actions → Publish gem to RubyGems → Run workflow**. Select the target from **Next version** (for example, `patch → 0.1.3`). Leave **Publish to RubyGems** unchecked to build and test the package. To publish it, select `main` and check the box.
 
-Open **Actions → Publish gem to RubyGems → Run workflow** and choose `patch`, `minor`, or `major`. The [latest GitHub Release](https://github.com/feed-mob/request-rescue/releases/latest) lists the three next versions. Enter an optional **Exact version** to override the increment with a higher stable `X.Y.Z` value. The run summary shows the selected version, source version, latest tag, and latest RubyGems version.
+After publishing, the workflow tags the source and opens a version update PR. From a current checkout, run the command in that PR (for example, `bin/refresh-release-form 0.1.3`). It uses your GitHub CLI login to update the three dropdown choices on the PR branch. Merge the PR before starting the next release.
 
-| To | Form settings | Result |
-| --- | --- | --- |
-| Rehearse a release | Leave both checkboxes clear (default). | Build the gem, test that package across the full matrix, and retain the artifacts. |
-| Preview the version | Select **Preview versions only**. | Show the calculated versions and finish before building. |
-| Publish | Select `main`, check **Publish the verified gem**, and type `release` in the confirmation field. | Build and verify the package, then publish it using RubyGems trusted publishing. |
-
-Dry runs and previews can run on a feature branch. For example, `gh workflow run release.yml --ref main -f bump=minor` starts a dry run. To publish the minor release, add `-f publish=true -f confirm=release`.
-
-After RubyGems accepts the package, the workflow tags the versioned source commit (for example, `v0.1.1`) and opens a PR to bring that commit into `main`. The workflow starts CI on the version branch automatically. Merge the version update before starting the next release. If recording the release fails after upload, rerun the failed jobs in the original run. When the publish job is retried, it checks the published SHA-256 against the tested package before proceeding.
+The required **All request tests passed** check verifies the published tag, version change, and generated choices for a version update. Other changes and release candidates run the full compatibility matrix. If recording the release fails after upload, rerun the failed jobs in the original run.
 
 Each published tag has a [GitHub Release](https://github.com/feed-mob/request-rescue/releases) with release notes, the verified gem and its SHA-256, and source code archives in ZIP and tar.gz formats. To include a short user-facing summary, add a `## X.Y.Z` section to `CHANGELOG.md` before starting the release. GitHub also generates notes from merged pull requests.
 

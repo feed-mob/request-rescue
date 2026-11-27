@@ -1,7 +1,6 @@
 name: Verify packaged gem
 on:
   pull_request:
-  workflow_dispatch:
   workflow_call:
     inputs:
       package-artifact:
@@ -12,19 +11,22 @@ permissions:
 jobs:
   record:
     name: Verify published version and tag
-    if: github.event_name == 'workflow_dispatch' && !inputs.package-artifact && startsWith(github.ref, 'refs/heads/release/v')
+    if: github.event_name == 'pull_request' && github.base_ref == 'main' && github.event.pull_request.head.repo.full_name == github.repository && startsWith(github.head_ref, 'release/v')
     runs-on: ubuntu-22.04
     outputs:
       verified: ${{ steps.check.outputs.verified }}
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.base.sha }}
           fetch-depth: 0
           persist-credentials: false
       - name: Compare the release commit with main and RubyGems
         id: check
+        env:
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
         run: |
-          if bash bin/verify-release-record "$GITHUB_REF_NAME" refs/remotes/origin/main; then
+          if bash bin/verify-release-record "$GITHUB_HEAD_REF" HEAD "$PR_HEAD"; then
             echo "verified=true" >> "$GITHUB_OUTPUT"
           else
             echo "Running the full matrix for this commit."
