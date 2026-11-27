@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-test "$(ruby bin/prepare-release "$BUMP")" = "$VERSION"
+test "$(ruby bin/prepare-release "$BUMP" "${CUSTOM_VERSION:-}")" = "$VERSION"
 tag="v$VERSION"
 branch="release/$tag"
 

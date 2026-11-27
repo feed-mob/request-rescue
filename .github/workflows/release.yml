@@ -1,10 +1,11 @@
 name: Publish gem to RubyGems
+run-name: ${{ inputs.preview_only && 'Preview release version' || 'Publish gem to RubyGems' }}
 
 on:
   workflow_dispatch:
     inputs:
       bump:
-        description: Version increment
+        description: Version increment (see Releases → Latest for next versions)
         type: choice
         required: true
         default: patch
@@ -12,21 +13,30 @@ on:
           - patch
           - minor
           - major
+      custom_version:
+        description: Exact version (optional X.Y.Z, overrides the increment)
+        type: string
+        required: false
+      preview_only:
+        description: Preview versions only (see the run summary)
+        type: boolean
+        default: false
 
 env:
   BUMP: ${{ inputs.bump }}
+  CUSTOM_VERSION: ${{ inputs.custom_version }}
 
 permissions:
   contents: read
 
-concurrency: rubygems-release
+concurrency: ${{ inputs.preview_only && format('rubygems-preview-{0}', github.run_id) || 'rubygems-release' }}
 
 jobs:
   prepare:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-22.04
     outputs:
-      version: ${{ steps.build.outputs.version }}
+      version: ${{ steps.resolve.outputs.version }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -34,21 +44,32 @@ jobs:
       - uses: ruby/setup-ruby@v1
         with:
           ruby-version: "3.2.9"
-      - name: Build the selected version
-        id: build
+      - name: Resolve the selected version
+        id: resolve
         run: |
           current=$(ruby -r ./lib/request_rescue/version -e 'print RequestRescue::VERSION')
-          version=$(ruby bin/prepare-release "$BUMP")
+          version=$(ruby bin/prepare-release "$BUMP" "$CUSTOM_VERSION")
           latest=$(curl -fsS --retry 3 https://rubygems.org/api/v1/gems/request-rescue.json | jq -er '.version')
-          if [[ "$latest" != "$current" && "$latest" != "$version" ]]; then
+          {
+            echo "## Selected version: $version"
+            echo
+            echo "Version on main: $current · Latest on RubyGems: $latest"
+            echo
+            ruby bin/prepare-release --options "$current"
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [[ "$latest" != "$current" && ! ( "$GITHUB_RUN_ATTEMPT" -gt 1 && "$latest" == "$version" ) ]]; then
             echo "RubyGems is at $latest. Merge its version update before releasing from $current." >&2
             exit 1
           fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Build the selected version
+        if: ${{ !inputs.preview_only }}
+        run: |
           SOURCE_DATE_EPOCH=$(git show -s --format=%ct HEAD)
           export SOURCE_DATE_EPOCH
           gem build request-rescue.gemspec --strict --output request-rescue.gem
-          echo "version=$version" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@v4
+        if: ${{ !inputs.preview_only }}
         with:
           name: release-candidate
           path: request-rescue.gem
@@ -56,6 +77,7 @@ jobs:
           overwrite: true
 
   verify:
+    if: ${{ !inputs.preview_only }}
     needs: prepare
     uses: ./.github/workflows/verify.yml
     with:
