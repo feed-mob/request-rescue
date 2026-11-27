@@ -1,5 +1,7 @@
 name: Verify packaged gem
-on: [push, pull_request]
+on:
+  pull_request:
+  workflow_call:
 permissions:
   contents: read
 jobs:
@@ -36,3 +38,12 @@ jobs:
             pkg/request-rescue-*/*.gem
             pkg/request-rescue-*/Gemfile.lock
             pkg/request-rescue-*/results.json
+
+  ci:
+    name: All request tests passed
+    needs: requests
+    if: ${{ always() }}
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Require the full matrix to succeed
+        run: test "${{ needs.requests.result }}" = success

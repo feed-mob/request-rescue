@@ -1,0 +1,51 @@
+name: Publish gem to RubyGems
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  verify:
+    uses: ./.github/workflows/verify.yml
+    permissions:
+      contents: read
+
+  publish:
+    needs: verify
+    concurrency: rubygems-release
+    runs-on: ubuntu-22.04
+    environment: release
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.2.9"
+      - name: Check whether the version is already published
+        id: version
+        run: |
+          version=$(ruby -r ./lib/request_rescue/version -e 'print RequestRescue::VERSION')
+          url="https://rubygems.org/api/v2/rubygems/request-rescue/versions/$version.json"
+          status=$(curl --silent --show-error --retry 3 --output /dev/null --write-out '%{http_code}' "$url")
+          case "$status" in
+            200) echo "Version $version is already published" ;;
+            404) echo "publish=true" >> "$GITHUB_OUTPUT" ;;
+            *) echo "RubyGems version lookup returned HTTP $status" >&2; exit 1 ;;
+          esac
+      - name: Build gem
+        if: steps.version.outputs.publish == 'true'
+        run: |
+          mkdir -p pkg
+          gem build request-rescue.gemspec --strict --output pkg/request-rescue.gem
+      - name: Authenticate with RubyGems
+        if: steps.version.outputs.publish == 'true'
+        uses: rubygems/configure-rubygems-credentials@c6ca7f4bac0e29c9bde8eeae0a0a986b27efa05f # v2.2.0
+        with:
+          owner: "256982"
+      - name: Publish the built gem
+        if: steps.version.outputs.publish == 'true'
+        run: gem push --host https://rubygems.org pkg/request-rescue.gem
