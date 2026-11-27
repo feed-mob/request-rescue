@@ -4,8 +4,15 @@ require_relative "../lib/request_rescue/version"
 current = RequestRescue::VERSION
 abort "Expected a stable major.minor.patch version, got #{current}" unless /\A\d+\.\d+\.\d+\z/.match?(current)
 
-major, minor, patch = current.split(".")
-version = [major, minor, Integer(patch, 10) + 1].join(".")
+abort "Usage: ruby bin/prepare-release patch|minor|major" unless ARGV.size == 1
+major, minor, patch = current.split(".").map(&:to_i)
+parts = case ARGV.first
+        when "patch" then [major, minor, patch + 1]
+        when "minor" then [major, minor + 1, 0]
+        when "major" then [major + 1, 0, 0]
+        else abort "Choose patch, minor, or major"
+        end
+version = parts.join(".")
 path = File.expand_path("../lib/request_rescue/version.rb", __dir__)
 source = File.read(path)
 updated = source.sub(%Q(VERSION = "#{current}"), %Q(VERSION = "#{version}"))

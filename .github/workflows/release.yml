@@ -1,6 +1,20 @@
 name: Publish gem to RubyGems
 
-on: workflow_dispatch
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Version increment
+        type: choice
+        required: true
+        default: patch
+        options:
+          - patch
+          - minor
+          - major
+
+env:
+  BUMP: ${{ inputs.bump }}
 
 permissions:
   contents: read
@@ -20,10 +34,16 @@ jobs:
       - uses: ruby/setup-ruby@v1
         with:
           ruby-version: "3.2.9"
-      - name: Build the next patch version
+      - name: Build the selected version
         id: build
         run: |
-          version=$(ruby bin/prepare-release)
+          current=$(ruby -r ./lib/request_rescue/version -e 'print RequestRescue::VERSION')
+          version=$(ruby bin/prepare-release "$BUMP")
+          latest=$(curl -fsS --retry 3 https://rubygems.org/api/v1/gems/request-rescue.json | jq -er '.version')
+          if [[ "$latest" != "$current" && "$latest" != "$version" ]]; then
+            echo "RubyGems is at $latest. Merge its version update before releasing from $current." >&2
+            exit 1
+          fi
           SOURCE_DATE_EPOCH=$(git show -s --format=%ct HEAD)
           export SOURCE_DATE_EPOCH
           gem build request-rescue.gemspec --strict --output request-rescue.gem
@@ -85,6 +105,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      actions: write
     steps:
       - uses: actions/checkout@v4
       - uses: ruby/setup-ruby@v1
@@ -95,3 +116,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.prepare.outputs.version }}
         run: bash bin/record-release
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-candidate
+          path: pkg
+      - name: Publish GitHub Release notes and the verified gem
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          mv pkg/request-rescue.gem "pkg/request-rescue-$VERSION.gem"
+          bash bin/github-release

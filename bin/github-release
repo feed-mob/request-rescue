@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+tag="v$VERSION"
+asset="request-rescue-$VERSION.gem"
+package="pkg/$asset"
+checksum=$(shasum -a 256 "$package" | cut -d ' ' -f 1)
+
+# Keep an incomplete upload in a draft so a retry can finish it.
+if ! id=$(gh release view "$tag" --json databaseId --jq .databaseId); then
+  summary=$(awk -v heading="## $VERSION" '/^## / { if (found) exit; found = ($0 == heading); next } found' CHANGELOG.md)
+  gh release create "$tag" --verify-tag --draft --title "$tag" --generate-notes --notes-file - <<EOF
+$summary
+
+[Install request-rescue $VERSION from RubyGems](https://rubygems.org/gems/request-rescue/versions/$VERSION).
+
+**Gem SHA-256**: \`$checksum\`
+EOF
+  id=$(gh release view "$tag" --json databaseId --jq .databaseId)
+fi
+
+endpoint="repos/{owner}/{repo}/releases/$id"
+release=$(gh api "$endpoint")
+digest=$(jq -r --arg name "$asset" '.assets[] | select(.name == $name) | .digest' <<< "$release")
+if [[ -z "$digest" ]]; then
+  gh release upload "$tag" "$package"
+  digest=$(gh api "$endpoint" | jq -r --arg name "$asset" '.assets[] | select(.name == $name) | .digest')
+fi
+if [[ "$digest" != "sha256:$checksum" ]]; then
+  echo "The GitHub asset checksum differs from the verified gem." >&2
+  exit 1
+fi
+if jq -e '.draft' <<< "$release" >/dev/null; then
+  gh release edit "$tag" --draft=false
+fi
