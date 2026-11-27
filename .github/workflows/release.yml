@@ -8,9 +8,9 @@ on:
         description: Next version
         type: choice
         required: true
-        default: patch → 0.1.4
+        default: patch → 0.1.5
         options:
-          - patch → 0.1.4
+          - patch → 0.1.5
           - minor → 0.2.0
           - major → 1.0.0
       publish:
