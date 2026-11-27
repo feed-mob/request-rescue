@@ -10,7 +10,30 @@ on:
 permissions:
   contents: read
 jobs:
+  record:
+    name: Verify published version and tag
+    if: github.event_name == 'workflow_dispatch' && !inputs.package-artifact && startsWith(github.ref, 'refs/heads/release/v')
+    runs-on: ubuntu-22.04
+    outputs:
+      verified: ${{ steps.check.outputs.verified }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Compare the release commit with main and RubyGems
+        id: check
+        run: |
+          if bash bin/verify-release-record "$GITHUB_REF_NAME" refs/remotes/origin/main; then
+            echo "verified=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Running the full matrix for this commit."
+            echo "verified=false" >> "$GITHUB_OUTPUT"
+          fi
+
   requests:
+    needs: record
+    if: ${{ !cancelled() && needs.record.result != 'failure' && needs.record.outputs.verified != 'true' }}
     runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
@@ -34,7 +57,7 @@ jobs:
           ruby-version: ${{ matrix.ruby }}
           bundler: 2.4.22
       - name: Check manual version increments
-        if: matrix.apipie == '' && github.event_name == 'pull_request'
+        if: matrix.apipie == '' && !inputs.package-artifact
         run: ruby test/release_versions.rb
       - uses: actions/download-artifact@v4
         if: inputs.package-artifact
@@ -55,9 +78,17 @@ jobs:
 
   ci:
     name: All request tests passed
-    needs: requests
+    needs: [record, requests]
     if: ${{ always() }}
     runs-on: ubuntu-22.04
     steps:
-      - name: Require the full matrix to succeed
-        run: test "${{ needs.requests.result }}" = success
+      - name: Require a verified release record or a passing matrix
+        env:
+          RECORD: ${{ needs.record.result }}
+          VERIFIED: ${{ needs.record.outputs.verified }}
+          MATRIX: ${{ needs.requests.result }}
+        run: |
+          case "$RECORD/$VERIFIED/$MATRIX" in
+            success/true/skipped | success/false/success | skipped//success) exit 0 ;;
+            *) echo "Unexpected verification results: $RECORD/$VERIFIED/$MATRIX"; exit 1 ;;
+          esac
