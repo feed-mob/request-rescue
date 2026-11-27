@@ -1,0 +1,63 @@
+#!/usr/bin/env ruby
+require "tmpdir"
+require "fileutils"
+require "json"
+require "digest"
+require "rbconfig"
+
+root = File.expand_path("..", __dir__)
+rails, rack = ARGV
+abort "Usage: bin/verify RAILS_VERSION RACK_VERSION" unless rails && rack
+upstream = ENV["BASELINE_GEM"]
+ENV.delete("APIPIE_VERSION") if ENV["APIPIE_VERSION"].to_s.empty?
+name = upstream ? "feedmob-rescue" : "request-rescue"
+out = File.join(root, "pkg", "#{name}-#{RUBY_VERSION}-rails#{rails}-rack#{rack}-apipie#{ENV.fetch("APIPIE_VERSION", "none")}")
+FileUtils.mkdir_p(out)
+Dir.mktmpdir("request-rescue") do |tmp|
+  package = File.join(out, "#{name}.gem")
+  installed = upstream
+  unless installed
+    if ENV["VERIFY_PACKAGE"]
+      FileUtils.cp(ENV.fetch("VERIFY_PACKAGE"), package)
+    else
+      system("gem", "build", "#{name}.gemspec", "--output", package, chdir: root, exception: true)
+    end
+    system("gem", "install", "--local", "--ignore-dependencies", "--no-document", "--install-dir", tmp, package, exception: true)
+    installed = Dir[File.join(tmp, "gems", "#{name}-*")].fetch(0)
+    # Bundler path sources expect the installed gemspec beside lib/.
+    spec = Dir[File.join(tmp, "specifications", "#{name}-*.gemspec")].fetch(0)
+    FileUtils.cp(spec, File.join(installed, "#{name}.gemspec"))
+  end
+  gemfile = File.join(tmp, "Gemfile")
+  FileUtils.cp(File.join(root, "test/Gemfile"), gemfile)
+  FileUtils.cp(ENV["VERIFY_LOCK"], gemfile + ".lock") if ENV["VERIFY_LOCK"]
+  env = { "BUNDLE_GEMFILE" => gemfile, "TEST_GEM" => name, "TEST_GEM_PATH" => installed,
+          "RAILS_VERSION" => rails, "RACK_VERSION" => rack }
+  env["BUNDLE_FROZEN"] = "true" if ENV["VERIFY_LOCK"]
+  # Reuse available gems but keep newly installed dependencies in the build directory.
+  cache = File.join(root, "pkg", "dependencies", "#{Gem::Platform.local}-#{RUBY_VERSION}")
+  FileUtils.mkdir_p(cache)
+  env.update("GEM_HOME" => cache, "GEM_PATH" => ([cache] + Gem.path).join(File::PATH_SEPARATOR))
+  unless system(env, "bundle", "install", "--local", out: File::NULL, err: File::NULL)
+    system(env, "bundle", "install", exception: true)
+  end
+  scenarios = if upstream
+    [["production", "yes", "/", "no"], ["development", "yes", "/", "no"]]
+  else
+    [["production", "no", "/errors", "no"], ["production", "yes", "/", "no"],
+     ["production", "yes", "/errors", "no"], ["production", "no", "/errors", "yes"],
+     ["development", "no", "/", "no"], ["test", "yes", "/", "no"]]
+  end
+  results = scenarios.map do |environment, legacy, mount, api|
+    settings = env.merge("RAILS_ENV" => environment, "LEGACY" => legacy, "MOUNT_AT" => mount, "HOST_API" => api)
+    settings["EXCEPTION_ROUTES"] = "yes" if legacy == "yes" && mount == "/"
+    output = IO.popen(settings, ["bundle", "exec", RbConfig.ruby, File.join(root, "test/e2e.rb")], &:read)
+    abort "Failed: #{environment}, legacy=#{legacy}, mount=#{mount}, api=#{api}" unless $?.success?
+    JSON.parse(output.lines.last)
+  end
+  FileUtils.cp(gemfile + ".lock", File.join(out, "Gemfile.lock"))
+  artifact = { ruby: RUBY_VERSION, rails: rails, rack: rack, apipie: ENV["APIPIE_VERSION"],
+               sha256: upstream ? nil : Digest::SHA256.file(package).hexdigest, scenarios: results }
+  File.write(File.join(out, "results.json"), JSON.pretty_generate(artifact) + "\n")
+  puts "PASS #{out} (#{results.sum { |r| r.fetch("checks").size }} requests)"
+end

@@ -1,0 +1,6 @@
+source "https://rubygems.org"
+
+gem "railties", ENV.fetch("RAILS_VERSION")
+gem "rack", ENV.fetch("RACK_VERSION")
+gem ENV.fetch("TEST_GEM"), path: ENV.fetch("TEST_GEM_PATH")
+gem "apipie-rails", ENV["APIPIE_VERSION"] if ENV["APIPIE_VERSION"]

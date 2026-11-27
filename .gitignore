@@ -1,0 +1,5 @@
+/pkg/
+/.bundle/
+/test/host/log/
+/test/host/tmp/
+/Gemfile.lock
