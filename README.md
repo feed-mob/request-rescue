@@ -74,7 +74,7 @@ The verifier builds and installs the gem into a temporary directory, boots a Rai
 
 Open **Actions → Publish gem to RubyGems → Run workflow**. Choose **patch**, **minor** or **major** under **Version increment**. The workflow calculates the target from the version in the selected branch. Leave **Publish to RubyGems** unchecked to build and test the package. To publish it, select `main` and check the box.
 
-After publishing, the workflow tags the source, opens a PR to record the version on `main` and starts the required **All request tests passed** check on that PR. Merge the PR before the next release.
+After publishing, the workflow tags the source and opens a version update PR with the repository's built-in `GITHUB_TOKEN`. A maintainer with write access selects **Approve workflows to run** on the PR. Wait for **All request tests passed**, then merge the version update before the next release.
 
 For a version-only update, CI verifies the tag, the version change and the published RubyGems version. Other changes and release candidates run the full compatibility matrix. If recording the release fails after upload, rerun the failed jobs in the original run.
 

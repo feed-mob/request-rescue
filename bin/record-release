@@ -10,7 +10,7 @@ release_date=$(git show -s --format=%cI HEAD)
 export GIT_AUTHOR_DATE="$release_date" GIT_COMMITTER_DATE="$release_date"
 git add lib/request_rescue/version.rb
 git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
-  commit -m "release: Record $tag" -m "[skip ci]"
+  commit -m "release: Record $tag"
 
 state=$(gh pr list --base main --head "$branch" --state all --json state,isCrossRepository --jq '[.[] | select(.isCrossRepository == false)][0].state // empty')
 case "$state" in
@@ -22,21 +22,8 @@ case "$state" in
 ## Summary
 
 - Update the gem version to [$VERSION](https://rubygems.org/gems/request-rescue/versions/$VERSION).
+- Select **Approve workflows to run** to start the required PR check, then merge once it passes.
 EOF
     ;;
   *) echo "Unexpected PR state: $state" >&2; exit 1 ;;
 esac
-
-# The generated commit skips the PR event. Dispatch its required check once.
-# Subsequent edits to the PR run normal pull request CI.
-if [[ "$state" != MERGED ]]; then
-  head=$(gh pr view "$branch" --json headRefOid --jq .headRefOid)
-  if [[ "$head" != "$(git rev-parse HEAD)" ]]; then
-    exit 0
-  fi
-  started=$(gh run list --workflow verify.yml --event workflow_dispatch --branch "$branch" \
-    --commit "$head" --limit 1 --json databaseId --jq '.[0].databaseId // empty')
-  if [[ -z "$started" ]]; then
-    gh workflow run verify.yml --ref "$branch"
-  fi
-fi
