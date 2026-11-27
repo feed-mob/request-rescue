@@ -1,18 +1,18 @@
 name: Publish gem to RubyGems
 run-name: ${{ inputs.publish && 'Publish gem to RubyGems' || 'Dry run – build and verify gem' }}
 
-on:
+"on":
   workflow_dispatch:
     inputs:
       bump:
-        description: Next version
+        description: Version increment
         type: choice
         required: true
-        default: patch → 0.1.5
+        default: patch
         options:
-          - patch → 0.1.5
-          - minor → 0.2.0
-          - major → 1.0.0
+          - patch
+          - minor
+          - major
       publish:
         description: Publish to RubyGems (unchecked runs a dry run)
         type: boolean
@@ -53,8 +53,6 @@ jobs:
             echo "## Selected version: $version"
             echo
             echo "Source version: $current · Latest tag: ${latest_tag:-none} · Latest on RubyGems: $latest"
-            echo
-            ruby bin/prepare-release --options "$current"
           } >> "$GITHUB_STEP_SUMMARY"
           if [[ "$latest" != "$current" && ! ( "$GITHUB_RUN_ATTEMPT" -gt 1 && "$latest" == "$version" ) ]]; then
             echo "RubyGems is at $latest. Merge its version update before releasing from $current." >&2
@@ -129,6 +127,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      actions: write
     steps:
       - uses: actions/checkout@v4
       - uses: ruby/setup-ruby@v1

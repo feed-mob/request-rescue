@@ -1,8 +1,7 @@
 #!/usr/bin/env ruby
 require_relative "../lib/request_rescue/version"
 
-mode, base = ARGV
-current = %w[--options --form].include?(mode) ? base : RequestRescue::VERSION
+current = RequestRescue::VERSION
 stable = /\A(?:0|[1-9]\d*)(?:\.(?:0|[1-9]\d*)){2}\z/
 abort "Expected a stable X.Y.Z version, got #{current.inspect}" unless stable.match?(current.to_s)
 major, minor, patch = current.split(".").map(&:to_i)
@@ -12,25 +11,8 @@ options = {
   "major" => "#{major + 1}.0.0"
 }
 
-if mode == "--options" && ARGV.size == 2
-  puts "Next versions after `#{current}`", "", "| Increment | Version |", "| --- | --- |"
-  options.each { |bump, target| puts "| #{bump} | `#{target}` |" }
-  exit
-end
-
-if mode == "--form" && ARGV.size == 2
-  form = STDIN.read
-  labels = /^(        default: |          - )(patch|minor|major) → [0-9]+\.[0-9]+\.[0-9]+$/
-  expected = [["        default: ", "patch"]] + options.keys.map { |key| ["          - ", key] }
-  abort "Unexpected version choices in release.yml" unless form.scan(labels) == expected
-  print form.gsub(labels) { "#{$1}#{$2} → #{options.fetch($2)}" }
-  exit
-end
-
-bump, shown = mode.to_s.split(" → ", 2)
-abort "Choose patch, minor, or major" unless ARGV.size == 1 && options.key?(bump)
-version = options.fetch(bump)
-abort "Stale version option: #{shown}; expected #{version}" if shown && shown != version
+abort "Choose patch, minor, or major" unless ARGV.size == 1 && options.key?(ARGV.first)
+version = options.fetch(ARGV.first)
 
 path = File.expand_path("../lib/request_rescue/version.rb", __dir__)
 source = File.read(path)
