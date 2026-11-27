@@ -63,7 +63,7 @@ The verifier builds and installs the gem into a temporary directory, boots a Rai
 
 ## Releases
 
-Every pull request and merge to `main` runs the compatibility matrix. The **All request tests passed** check is required to merge.
+Every pull request runs the compatibility matrix. The **All request tests passed** check is required to merge.
 
 To publish, open **Actions → Publish gem to RubyGems → Run workflow**, select `main`, and click **Run workflow**. The workflow builds the next patch version (for example, `0.1.0` → `0.1.1`), tests the same gem across the full matrix, and pushes it to RubyGems using trusted publishing.
 
