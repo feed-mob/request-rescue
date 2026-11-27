@@ -47,12 +47,15 @@ Development re-raises handled controller exceptions for debugging. Cross-origin 
 ## Migrate from feedmob-rescue 0.1.7
 
 1. Replace the old Gemfile entry and change `include Feedmob::Rescue` to `include RequestRescue::Controller`.
-2. Replace the old engine with `RequestRescue::Engine` at the same mount path and name it `request_rescue`. Existing root mounts can continue using `at: "/"`. Keep the application's Apipie dependency if its controllers use Apipie.
+2. Replace the old engine with `RequestRescue::Engine` at the same mount path. Existing root mounts can continue using `at: "/"`. Migration redirects use the mount name, which Rails sets to `request_rescue` unless you pass a different `as:`. Keep the application's Apipie dependency if its controllers use Apipie.
 3. Set `config.request_rescue.legacy_responses = true` in the application configuration to preserve the previous redirects and empty 200 response to cross-origin script requests in production.
+4. Replace `config.exceptions_app = self.routes` with `config.exceptions_app = RequestRescue::ExceptionsApp`. Migration mode does not depend on the exception app, so the redirects from step 3 stay the same.
 
-Existing root mounts can keep `config.exceptions_app = self.routes` for their numeric 404 and 500 routes. Both routes accept all HTTP verbs recognized by Rails. To preserve the original HTTP error status regardless of the mount path, use `RequestRescue::ExceptionsApp`.
+With `self.routes`, a routing miss or an application exception renders the 404 or 500 page with status 200, so load balancers and monitoring do not count it as an error. Only `/404` and `/500` are routed, so other statuses, such as the 400 from `params.require`, return an empty body. `RequestRescue::ExceptionsApp` renders an error page with the status Rails assigns. Keep `self.routes` only while something depends on status 200, and keep the engine mounted at `/` in that case.
 
 Check these differences when testing a migration.
+
+- The old error pages redirected requests that accept JSON to `/not_found`, including requests for `/not_found` itself, so a client following redirects never got a response. With `exceptions_app = self.routes`, routing misses, `.json` paths and application exceptions did the same. In migration mode the new pages answer these requests with status 200 and a JSON body such as `{"errors":["Page not found"]}`. Controller redirects for unsupported formats and Apipie errors still apply to JSON requests.
 
 - The old engine rendered ERB views through the host's `ApplicationController`. The new engine serves standalone Rack responses. Check any error-page branding, layout overrides or controller callbacks your application relies on.
 - Migration mode validates the encoding of query values before routing. In version 0.1.3, a mounted page that ignores its query can return 200 for invalid UTF-8. See the [changelog](CHANGELOG.md) for the correction. With migration mode off, Rails can apply per-action parameter encodings.

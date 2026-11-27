@@ -41,7 +41,8 @@ The comparison uses the downstream `feedmob-rescue 0.1.7` revision `c14dcde21bca
 | Query validation | Invalid UTF-8 in scalar and nested values returns 400 in migration mode, even on a mounted page. Valid UTF-8 reaches the page. This comparison caught a regression in v0.1.3. |
 | Controller concern | Unknown formats and missing templates redirect to `not_found`. Missing and invalid Apipie parameters redirect to `invalid_params`. All four exceptions propagate in development. |
 | Cross-origin JavaScript | A non-XHR script request raises in development and test. In production, migration mode returns an empty 200 and a valid XHR receives the script. |
-| Error engine and exception routing | Both named pages render. The numeric routes handle non-GET requests and HEAD. With the old root-mount configuration, a routing miss and an application exception render the 404 and 500 pages with status 200. |
+| Error engine and exception routing | Both named pages render. The numeric routes handle non-GET requests and HEAD. With the old root-mount configuration, a routing miss and an application exception render the 404 and 500 pages with status 200, and a 400 from `params.require` has an empty body. In migration mode with `RequestRescue::ExceptionsApp`, the same requests return 404, 500 and a 400 page. |
+| JSON requests in migration mode | Controllers redirect unsupported formats to `not_found` in both gems. The old pages, routing misses and application exceptions redirect JSON requests to `/not_found`, which redirects to itself. The new pages return status 200 with a JSON error. |
 
 To repeat the side-by-side check, point `BASELINE_GEM` at a clean checkout of the legacy revision. Run both commands from this repository:
 

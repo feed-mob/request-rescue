@@ -28,6 +28,10 @@ class ProbeController < ApplicationController
     raise "private fixture exception"
   end
 
+  def required
+    params.require(:item)
+  end
+
   if defined?(Apipie)
     api :GET, "/params", "Check a required numeric parameter"
     param :number, :number, required: true

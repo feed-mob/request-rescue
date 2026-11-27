@@ -53,7 +53,7 @@ client = Rack::MockRequest.new(app)
 checks = []
 check = lambda do |method, path, status, headers = {}, &validate|
   response = client.request(method, path, headers)
-  label = "#{method} #{path} -> #{status}"
+  label = "#{method} #{path}#{" (Accept: #{headers['HTTP_ACCEPT']})" if headers["HTTP_ACCEPT"]} -> #{status}"
   unless response.status == status && (!validate || validate.call(response))
     raise "#{label}: got #{response.status}, #{response['location']}, #{response.body[0, 120]}"
   end
@@ -107,9 +107,35 @@ if legacy && !Rails.env.development?
   check.call("GET", "#{prefix}/not_found?value=%FF", 400)
   check.call("GET", "#{prefix}/not_found?items[][name]=%FF", 400)
   check.call("GET", "#{prefix}/not_found?value=%E2%9C%93", 200)
-  if Rails.env.production? && (baseline || ENV["EXCEPTION_ROUTES"] == "yes")
-    check.call("GET", "/absent", 200) { |r| r.body.include?("404") }
-    check.call("GET", "/fault", 200) { |r| r.body.include?("500") }
+  # Controllers still redirect JSON requests, but feedmob-rescue 0.1.7 also redirected
+  # its own pages to not_found, so a client following redirects never got a response.
+  check.call("GET", "/format", 302, json) { |r| URI(r["location"]).path == "#{prefix}/not_found" }
+  page_for_json = lambda do |path, message, headers = json|
+    if baseline
+      check.call("GET", path, 302, headers) { |r| URI(r["location"]).path == "/not_found" }
+    else
+      check.call("GET", path, 200, headers) do |r|
+        r["content-type"].start_with?("application/json") && JSON.parse(r.body) == { "errors" => [message] }
+      end
+    end
+  end
+  page_for_json.call("#{prefix}/not_found", "Page not found")
+  page_for_json.call("#{prefix}/invalid_params", "Invalid parameters")
+  if Rails.env.production?
+    if baseline || ENV["EXCEPTION_ROUTES"] == "yes"
+      # The routes only define /404 and /500. Other statuses get an empty body.
+      check.call("GET", "/absent", 200) { |r| r.body.include?("404") }
+      check.call("GET", "/fault", 200) { |r| r.body.include?("500") }
+      check.call("GET", "/required", 400) { |r| r.body.empty? }
+      page_for_json.call("/absent", "Page not found")
+      page_for_json.call("/absent.json", "Page not found", {})
+      page_for_json.call("/fault", "Internal server error")
+    else
+      # RequestRescue::ExceptionsApp keeps legacy redirects and returns real statuses.
+      check.call("GET", "/absent", 404) { |r| r.body.include?("404") }
+      check.call("GET", "/fault", 500) { |r| !r.body.include?("private fixture exception") }
+      check.call("GET", "/required", 400) { |r| r.body.include?("400") }
+    end
   end
 elsif Rails.env.production?
   check.call("GET", "/script", 403, json) do |r|

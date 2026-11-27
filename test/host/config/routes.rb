@@ -7,5 +7,6 @@ Rails.application.routes.draw do
   get "script", to: "probe#cross_origin"
   get "javascript", to: "probe#javascript"
   get "fault", to: "probe#fault"
+  get "required", to: "probe#required"
   get "params", to: "probe#parameters_check"
 end
