@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+test "$(ruby bin/prepare-release)" = "$VERSION"
+tag="v$VERSION"
+branch="release/$tag"
+
+# Use the same commit on retries, even after the branch has been merged.
+release_date=$(git show -s --format=%cI HEAD)
+export GIT_AUTHOR_DATE="$release_date" GIT_COMMITTER_DATE="$release_date"
+git add lib/request_rescue/version.rb
+git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+  commit -m "release: Record $tag"
+
+state=$(gh pr list --base main --head "$branch" --state all --json state --jq '.[0].state // empty')
+case "$state" in
+  OPEN|MERGED) git push origin "HEAD:refs/tags/$tag" ;;
+  CLOSED) echo "The version update PR for $tag was closed. Reopen it to resume." >&2; exit 1 ;;
+  "")
+    git push --atomic origin "HEAD:refs/tags/$tag" "HEAD:refs/heads/$branch"
+    gh pr create --base main --head "$branch" --title "release: Record $tag" --body-file - <<EOF
+## Summary
+
+- Update the gem version to [$VERSION](https://rubygems.org/gems/request-rescue/versions/$VERSION).
+EOF
+    ;;
+  *) echo "Unexpected PR state: $state" >&2; exit 1 ;;
+esac

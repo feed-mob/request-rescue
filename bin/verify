@@ -17,10 +17,10 @@ Dir.mktmpdir("request-rescue") do |tmp|
   package = File.join(out, "#{name}.gem")
   installed = upstream
   unless installed
-    if ENV["VERIFY_PACKAGE"]
-      FileUtils.cp(ENV.fetch("VERIFY_PACKAGE"), package)
-    else
+    if ENV["VERIFY_PACKAGE"].to_s.empty?
       system("gem", "build", "#{name}.gemspec", "--output", package, chdir: root, exception: true)
+    else
+      FileUtils.cp(ENV.fetch("VERIFY_PACKAGE"), package)
     end
     system("gem", "install", "--local", "--ignore-dependencies", "--no-document", "--install-dir", tmp, package, exception: true)
     installed = Dir[File.join(tmp, "gems", "#{name}-*")].fetch(0)
