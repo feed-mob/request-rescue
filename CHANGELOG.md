@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.0 (unreleased)
+## 0.1.0
 
 - Add Rails request middleware, a controller concern, mountable error pages and a Rack exception app.
 - Support HTML and JSON errors, API-only applications and optional Apipie validation.

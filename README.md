@@ -61,6 +61,10 @@ RBENV_VERSION=3.0.3 APIPIE_VERSION=0.8.1 rbenv exec ruby bin/verify 6.1.5 2.2.4
 
 The verifier builds and installs the gem into a temporary directory, boots a Rails host and exercises its full Rack stack. It writes a package, dependency lockfile and JSON request results with the package SHA-256 under `pkg/`. Omit `APIPIE_VERSION` to verify installation without the optional adapter. Set `VERIFY_PACKAGE` to an existing build to test the same bytes across runtimes. Set `VERIFY_LOCK` to a previous result’s lockfile to replay its dependency resolution. See the [compatibility matrix](https://github.com/feed-mob/request-rescue/blob/main/PLAN.md) for the seven targeted Ruby/Rails pairs and their Rack versions.
 
+## Releases
+
+Every pull request runs the compatibility matrix. The required **All request tests passed** check must pass before merging to `main`. Each merge starts the release workflow, which verifies the merged commit and publishes the version in `lib/request_rescue/version.rb` through RubyGems trusted publishing. The workflow skips publication if that version already exists. To release another version, update the version and changelog in a pull request.
+
 ## License
 
 [MIT](LICENSE.txt).

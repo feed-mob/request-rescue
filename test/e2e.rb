@@ -73,6 +73,10 @@ legacy = ENV["LEGACY"] == "yes" || baseline
 prefix = ENV.fetch("MOUNT_AT").sub(%r{/\z}, "")
 json = { "HTTP_ACCEPT" => "application/json" }
 check.call("GET", "/ok?value=hello", 200) { |r| JSON.parse(r.body)["value"] == "hello" }
+check.call("HEAD", "/ok", 200) { |r| r.body.empty? }
+check.call("POST", "/echo", 200, "CONTENT_TYPE" => "application/json", :input => '{"value":"posted"}') do |r|
+  JSON.parse(r.body) == { "value" => "posted" }
+end
 if Rails.env.development? || Rails.env.test?
   expect_error.call("/script", ActionController::InvalidCrossOriginRequest)
   if Rails.env.development?
