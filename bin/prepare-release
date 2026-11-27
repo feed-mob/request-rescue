@@ -1,18 +1,29 @@
 #!/usr/bin/env ruby
 require_relative "../lib/request_rescue/version"
 
-current = RequestRescue::VERSION
-abort "Expected a stable major.minor.patch version, got #{current}" unless /\A\d+\.\d+\.\d+\z/.match?(current)
-
-abort "Usage: ruby bin/prepare-release patch|minor|major" unless ARGV.size == 1
+list = ARGV.first == "--options"
+current = list ? ARGV[1] : RequestRescue::VERSION
+stable = /\A(?:0|[1-9]\d*)(?:\.(?:0|[1-9]\d*)){2}\z/
+abort "Expected a stable X.Y.Z version, got #{current.inspect}" unless stable.match?(current.to_s)
 major, minor, patch = current.split(".").map(&:to_i)
-parts = case ARGV.first
-        when "patch" then [major, minor, patch + 1]
-        when "minor" then [major, minor + 1, 0]
-        when "major" then [major + 1, 0, 0]
-        else abort "Choose patch, minor, or major"
-        end
-version = parts.join(".")
+options = {
+  "patch" => "#{major}.#{minor}.#{patch + 1}",
+  "minor" => "#{major}.#{minor + 1}.0",
+  "major" => "#{major + 1}.0.0"
+}
+
+if list && ARGV.size == 2
+  puts "Next versions after `#{current}`", "", "| Increment | Version |", "| --- | --- |"
+  options.each { |bump, target| puts "| #{bump} | `#{target}` |" }
+  exit
+end
+
+bump, custom = ARGV
+abort "Usage: ruby bin/prepare-release patch|minor|major [X.Y.Z]" unless (1..2).cover?(ARGV.size) && options.key?(bump)
+version = custom.to_s.empty? ? options.fetch(bump) : custom
+abort "Use a stable X.Y.Z version without leading zeros" unless stable.match?(version)
+abort "Target #{version} must be newer than #{current}" unless Gem::Version.new(version) > Gem::Version.new(current)
+
 path = File.expand_path("../lib/request_rescue/version.rb", __dir__)
 source = File.read(path)
 updated = source.sub(%Q(VERSION = "#{current}"), %Q(VERSION = "#{version}"))

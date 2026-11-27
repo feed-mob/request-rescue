@@ -9,12 +9,15 @@ checksum=$(shasum -a 256 "$package" | cut -d ' ' -f 1)
 # Keep an incomplete upload in a draft so a retry can finish it.
 if ! id=$(gh release view "$tag" --json databaseId --jq .databaseId); then
   summary=$(awk -v heading="## $VERSION" '/^## / { if (found) exit; found = ($0 == heading); next } found' CHANGELOG.md)
+  options=$(ruby bin/prepare-release --options "$VERSION")
   gh release create "$tag" --verify-tag --draft --title "$tag" --generate-notes --notes-file - <<EOF
 $summary
 
 [Install request-rescue $VERSION from RubyGems](https://rubygems.org/gems/request-rescue/versions/$VERSION).
 
 **Gem SHA-256**: \`$checksum\`
+
+$options
 EOF
   id=$(gh release view "$tag" --json databaseId --jq .databaseId)
 fi
