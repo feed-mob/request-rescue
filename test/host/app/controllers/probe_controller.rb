@@ -1,4 +1,12 @@
 class ProbeController < ApplicationController
+  unless ENV["HOST_API"] == "yes"
+    protect_from_forgery with: :exception, only: :javascript
+
+    def javascript
+      render js: "void(0)"
+    end
+  end
+
   def ok
     render json: { value: params[:value] || "ok" }
   end

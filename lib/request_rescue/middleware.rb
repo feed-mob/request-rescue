@@ -14,8 +14,11 @@ module RequestRescue
     private
 
     def valid_query?(env)
-      # Rack caches parsing here. Rails can still apply per-action encodings after routing.
-      Rack::Request.new(env).GET
+      query = Rack::Request.new(env).GET
+      # Legacy mode also checked encoding on routes that never read controller parameters.
+      if Rails.application.config.request_rescue.legacy_responses
+        ActionDispatch::Request::Utils.check_param_encoding(query)
+      end
       true
     rescue Rack::QueryParser::ParameterTypeError, Rack::QueryParser::InvalidParameterError, RangeError
       # Old Rack releases use RangeError when the parser's nesting limit is reached.

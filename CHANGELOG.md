@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Restore HTTP 400 in migration mode for query values with invalid UTF-8, including requests to mounted error pages.
+
 ## 0.1.1
 
 - Switch to manual patch releases and verify the same gem across all supported environments before publishing to RubyGems.
