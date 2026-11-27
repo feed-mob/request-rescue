@@ -42,7 +42,7 @@ Dir.mktmpdir("request-rescue") do |tmp|
     system(env, "bundle", "install", exception: true)
   end
   scenarios = if upstream
-    [["production", "yes", "/", "no"], ["development", "yes", "/", "no"]]
+    %w[production development test].map { |environment| [environment, "yes", "/", "no"] }
   else
     [["production", "no", "/errors", "no"], ["production", "yes", "/", "no"],
      ["production", "yes", "/errors", "no"], ["production", "no", "/errors", "yes"],

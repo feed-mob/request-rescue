@@ -5,6 +5,7 @@ Rails.application.routes.draw do
   get "format", to: "probe#format_error"
   get "template", to: "probe#template_error"
   get "script", to: "probe#cross_origin"
+  get "javascript", to: "probe#javascript"
   get "fault", to: "probe#fault"
   get "params", to: "probe#parameters_check"
 end
