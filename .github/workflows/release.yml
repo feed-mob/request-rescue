@@ -1,23 +1,18 @@
 name: Publish gem to RubyGems
 
-on:
-  push:
-    branches: [main]
+on: workflow_dispatch
+
+permissions:
+  contents: read
+
+concurrency: rubygems-release
 
 jobs:
-  verify:
-    uses: ./.github/workflows/verify.yml
-    permissions:
-      contents: read
-
-  publish:
-    needs: verify
-    concurrency: rubygems-release
+  prepare:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-22.04
-    environment: release
-    permissions:
-      contents: read
-      id-token: write
+    outputs:
+      version: ${{ steps.build.outputs.version }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -25,27 +20,78 @@ jobs:
       - uses: ruby/setup-ruby@v1
         with:
           ruby-version: "3.2.9"
-      - name: Check whether the version is already published
-        id: version
+      - name: Build the next patch version
+        id: build
         run: |
-          version=$(ruby -r ./lib/request_rescue/version -e 'print RequestRescue::VERSION')
-          url="https://rubygems.org/api/v2/rubygems/request-rescue/versions/$version.json"
-          status=$(curl --silent --show-error --retry 3 --output /dev/null --write-out '%{http_code}' "$url")
+          version=$(ruby bin/prepare-release)
+          SOURCE_DATE_EPOCH=$(git show -s --format=%ct HEAD)
+          export SOURCE_DATE_EPOCH
+          gem build request-rescue.gemspec --strict --output request-rescue.gem
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-candidate
+          path: request-rescue.gem
+          if-no-files-found: error
+          overwrite: true
+
+  verify:
+    needs: prepare
+    uses: ./.github/workflows/verify.yml
+    with:
+      package-artifact: release-candidate
+
+  publish:
+    needs: [prepare, verify]
+    runs-on: ubuntu-22.04
+    environment: release
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-candidate
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.2.9"
+      - name: Check the published checksum on retry
+        id: registry
+        run: |
+          url="https://rubygems.org/api/v2/rubygems/request-rescue/versions/$VERSION.json"
+          status=$(curl --silent --show-error --retry 3 -o version.json -w '%{http_code}' "$url")
           case "$status" in
-            200) echo "Version $version is already published" ;;
-            404) echo "publish=true" >> "$GITHUB_OUTPUT" ;;
-            *) echo "RubyGems version lookup returned HTTP $status" >&2; exit 1 ;;
+            200)
+              published=$(jq -er '.sha' version.json)
+              echo "$published  request-rescue.gem" | sha256sum --check
+              ;;
+            404) echo "push=true" >> "$GITHUB_OUTPUT" ;;
+            *) echo "RubyGems lookup returned HTTP $status" >&2; exit 1 ;;
           esac
-      - name: Build gem
-        if: steps.version.outputs.publish == 'true'
-        run: |
-          mkdir -p pkg
-          gem build request-rescue.gemspec --strict --output pkg/request-rescue.gem
       - name: Authenticate with RubyGems
-        if: steps.version.outputs.publish == 'true'
+        if: steps.registry.outputs.push == 'true'
         uses: rubygems/configure-rubygems-credentials@c6ca7f4bac0e29c9bde8eeae0a0a986b27efa05f # v2.2.0
         with:
           owner: "256982"
-      - name: Publish the built gem
-        if: steps.version.outputs.publish == 'true'
-        run: gem push --host https://rubygems.org pkg/request-rescue.gem
+      - name: Publish the verified package
+        if: steps.registry.outputs.push == 'true'
+        run: gem push --host https://rubygems.org request-rescue.gem
+
+  record:
+    needs: [prepare, publish]
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.2.9"
+      - name: Tag the released source and open its version update
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: bash bin/record-release

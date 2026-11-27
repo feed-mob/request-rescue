@@ -4,7 +4,7 @@ Request Rescue gives Rails applications consistent error responses for malformed
 
 ## Install
 
-Add `gem "request-rescue"` to your Gemfile and run `bundle install`. To try this checkout before the first RubyGems release, use `gem "request-rescue", path: "/path/to/request-rescue"`.
+Add `gem "request-rescue"` to your Gemfile and run `bundle install`. To try a local checkout, use `gem "request-rescue", path: "/path/to/request-rescue"`.
 
 Include the concern in controllers where you want to handle these exceptions. It also works with `ActionController::API`.
 
@@ -63,7 +63,11 @@ The verifier builds and installs the gem into a temporary directory, boots a Rai
 
 ## Releases
 
-Every pull request runs the compatibility matrix. The required **All request tests passed** check must pass before merging to `main`. Each merge starts the release workflow, which verifies the merged commit and publishes the version in `lib/request_rescue/version.rb` through RubyGems trusted publishing. The workflow skips publication if that version already exists. To release another version, update the version and changelog in a pull request.
+Every pull request and merge to `main` runs the compatibility matrix. The **All request tests passed** check is required to merge.
+
+To publish, open **Actions → Publish gem to RubyGems → Run workflow**, select `main`, and click **Run workflow**. The workflow builds the next patch version (for example, `0.1.0` → `0.1.1`), tests the same gem across the full matrix, and pushes it to RubyGems using trusted publishing.
+
+After RubyGems accepts the package, the workflow tags the versioned source commit (for example, `v0.1.1`) and opens a PR to bring that commit into `main`. Approve the PR's CI run if GitHub prompts, then merge the version update before starting the next release. If recording the release fails after upload, rerun the failed jobs in the original run. When the publish job is retried, it checks the published SHA-256 against the tested package before proceeding.
 
 ## License
 

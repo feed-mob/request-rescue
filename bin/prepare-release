@@ -1,0 +1,14 @@
+#!/usr/bin/env ruby
+require_relative "../lib/request_rescue/version"
+
+current = RequestRescue::VERSION
+abort "Expected a stable major.minor.patch version, got #{current}" unless /\A\d+\.\d+\.\d+\z/.match?(current)
+
+major, minor, patch = current.split(".")
+version = [major, minor, Integer(patch, 10) + 1].join(".")
+path = File.expand_path("../lib/request_rescue/version.rb", __dir__)
+source = File.read(path)
+updated = source.sub(%Q(VERSION = "#{current}"), %Q(VERSION = "#{version}"))
+abort "Could not update #{path}" if updated == source
+File.write(path, updated)
+puts version

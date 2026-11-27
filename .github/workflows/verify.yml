@@ -1,7 +1,13 @@
 name: Verify packaged gem
 on:
   pull_request:
+  push:
+    branches: [main]
   workflow_call:
+    inputs:
+      package-artifact:
+        type: string
+        default: ""
 permissions:
   contents: read
 jobs:
@@ -28,8 +34,14 @@ jobs:
         with:
           ruby-version: ${{ matrix.ruby }}
           bundler: 2.4.22
+      - uses: actions/download-artifact@v4
+        if: inputs.package-artifact
+        with:
+          name: ${{ inputs.package-artifact }}
+          path: candidate
       - run: ruby bin/verify "${{ matrix.rails }}" "${{ matrix.rack }}"
         env:
+          VERIFY_PACKAGE: ${{ inputs.package-artifact && 'candidate/request-rescue.gem' || '' }}
           APIPIE_VERSION: ${{ matrix.apipie }}
       - uses: actions/upload-artifact@v4
         with:
