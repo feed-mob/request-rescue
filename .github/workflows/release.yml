@@ -1,0 +1,36 @@
+name: Publish gem to RubyGems
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  publish:
+    if: ${{ !github.event.deleted }}
+    runs-on: ubuntu-22.04
+    environment: release
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.2.9"
+      - name: Build the tagged gem
+        run: |
+          version=$(ruby -r ./lib/request_rescue/version -e 'print RequestRescue::VERSION')
+          if [[ "$GITHUB_REF_NAME" != "v$version" ]]; then
+            echo "Tag $GITHUB_REF_NAME does not match gem version $version" >&2
+            exit 1
+          fi
+          mkdir -p pkg
+          gem build request-rescue.gemspec --strict --output pkg/request-rescue.gem
+      - name: Authenticate with RubyGems
+        uses: rubygems/configure-rubygems-credentials@c6ca7f4bac0e29c9bde8eeae0a0a986b27efa05f # v2.2.0
+        with:
+          owner: "256982"
+      - name: Publish the built gem
+        run: gem push --host https://rubygems.org pkg/request-rescue.gem
