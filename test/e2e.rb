@@ -79,13 +79,18 @@ check.call("POST", "/echo", 200, "CONTENT_TYPE" => "application/json", :input =>
 end
 if Rails.env.development? || Rails.env.test?
   expect_error.call("/script", ActionController::InvalidCrossOriginRequest)
+  expect_error.call("/javascript", ActionController::InvalidCrossOriginRequest)
   if Rails.env.development?
     expect_error.call("/format.xml", ActionController::UnknownFormat)
     expect_error.call("/template", ActionView::MissingTemplate)
-    expect_error.call("/params", Apipie::ParamMissing) if defined?(Apipie)
+    if defined?(Apipie)
+      expect_error.call("/params", Apipie::ParamMissing)
+      expect_error.call("/params?number=no", Apipie::ParamInvalid)
+    end
   end
-elsif legacy
-  check.call("GET", "/script", 200) { |r| r.body.empty? }
+end
+if legacy && !Rails.env.development?
+  check.call("GET", "/script", 200) { |r| r.body.empty? } unless Rails.env.test?
   %w[/format.xml /template].each do |path|
     check.call("GET", path, 302) { |r| URI(r["location"]).path == "#{prefix}/not_found" }
   end
@@ -96,11 +101,17 @@ elsif legacy
   end
   check.call("GET", "#{prefix}/not_found", 200) { |r| r.body.include?("404") }
   check.call("GET", "#{prefix}/invalid_params", 200) { |r| r.body.include?("422") }
-  if baseline || ENV["EXCEPTION_ROUTES"] == "yes"
+  check.call("POST", "#{prefix}/404", 200) { |r| r.body.include?("404") }
+  check.call("PUT", "#{prefix}/500", 200) { |r| r.body.include?("500") }
+  check.call("HEAD", "#{prefix}/500", 200) { |r| r.body.empty? }
+  check.call("GET", "#{prefix}/not_found?value=%FF", 400)
+  check.call("GET", "#{prefix}/not_found?items[][name]=%FF", 400)
+  check.call("GET", "#{prefix}/not_found?value=%E2%9C%93", 200)
+  if Rails.env.production? && (baseline || ENV["EXCEPTION_ROUTES"] == "yes")
     check.call("GET", "/absent", 200) { |r| r.body.include?("404") }
     check.call("GET", "/fault", 200) { |r| r.body.include?("500") }
   end
-else
+elsif Rails.env.production?
   check.call("GET", "/script", 403, json) do |r|
     r["content-type"].start_with?("application/json") && JSON.parse(r.body)["errors"] == ["Forbidden"] &&
       r["vary"].split(/,\s*/).sort == %w[Accept Origin]
@@ -123,6 +134,10 @@ else
   check.call("HEAD", "/absent", 404) { |r| r.body.empty? }
 end
 if Rails.env.production?
+  unless app.config.api_only
+    check.call("GET", "/javascript", legacy ? 200 : 403) { |r| legacy ? r.body.empty? : !r.body.include?("void(0)") }
+    check.call("GET", "/javascript", 200, "HTTP_X_REQUESTED_WITH" => "XMLHttpRequest") { |r| r.body.include?("void(0)") }
+  end
   check.call("UNRECOGNIZED", "/ok", 405) { |r| JSON.parse(r.body) == { "errors" => ["Method not allowed"] } }
   unless baseline
     check.call("GET", "/ok?value=1&value[]=2", 400)

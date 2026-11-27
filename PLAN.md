@@ -29,4 +29,26 @@ One downstream application has proposed upgrading to Ruby 3.1.4 and Rails 6.1.7.
 
 On November 27, 2026, all nine Ruby/Rails/Rack combinations passed locally using the same `0.1.0` package. Across Apipie versions and a host without Apipie, 11 environments passed 737 request assertions. The migration baseline also ran against the old gem on Rails 6.1.7.6. The local report is in `pkg/verification.md`.
 
-GitHub Actions runs the same matrix. On the initial commit, 10 jobs passed. The Rails 7.1.3.4 job with Apipie 1.4.0 returned HTTP 500 on its first request. A passing CI run, a migration trial in a downstream application, and publication to RubyGems are still pending. [Initial CI run](https://github.com/feed-mob/request-rescue/actions/runs/45925696603)
+The v0.1.3 release passed the GitHub Actions compatibility matrix and was published to RubyGems. The Rails 7.1 / Apipie 1.4.0 test host uses the downstream RDoc 6.7.0 dependency. [Release verification](https://github.com/feed-mob/request-rescue/actions/runs/45936731347) · [Published gem](https://rubygems.org/gems/request-rescue/versions/0.1.3)
+
+## Migration verification
+
+The comparison uses the downstream `feedmob-rescue 0.1.7` revision `c14dcde21bcaedd3f2d033342b3102a521cb4d69` and a packaged Request Rescue in the same Rails host. The old gem runs with its root-mounted engine and `config.exceptions_app = routes`. The new gem also runs with a custom mount, direct error responses and an API-only host.
+
+| Legacy component | What the Rails host verifies |
+| --- | --- |
+| HTTP method middleware | GET, POST and HEAD reach the host. An unknown method returns 405 with the original JSON error. |
+| Query validation | Invalid UTF-8 in scalar and nested values returns 400 in migration mode, even on a mounted page. Valid UTF-8 reaches the page. This comparison caught a regression in v0.1.3. |
+| Controller concern | Unknown formats and missing templates redirect to `not_found`. Missing and invalid Apipie parameters redirect to `invalid_params`. All four exceptions propagate in development. |
+| Cross-origin JavaScript | A non-XHR script request raises in development and test. In production, migration mode returns an empty 200 and a valid XHR receives the script. |
+| Error engine and exception routing | Both named pages render. The numeric routes handle non-GET requests and HEAD. With the old root-mount configuration, a routing miss and an application exception render the 404 and 500 pages with status 200. |
+
+To repeat the side-by-side check, point `BASELINE_GEM` at a clean checkout of the legacy revision. Run both commands from this repository:
+
+```sh
+export RBENV_VERSION=3.2.9 APIPIE_VERSION=0.8.1
+BASELINE_GEM="$PWD/../feedmob-rescue" rbenv exec ruby bin/verify 6.1.7.6 2.2.9
+rbenv exec ruby bin/verify 6.1.7.6 2.2.9
+```
+
+Each run writes its request assertions and lockfile to a separate directory under `pkg/`. The new gem's results also include its package checksum. The shared host verifies the gem's request behavior. A migration rehearsal with a downstream application's own middleware, layouts, callbacks and routes is still pending. See the [migration guide](README.md#migrate-from-feedmob-rescue-017) for application-specific checks.
