@@ -65,9 +65,15 @@ The verifier builds and installs the gem into a temporary directory, boots a Rai
 
 Every pull request requires the **All request tests passed** check. Ordinary changes run the full compatibility matrix. For an automated version update, CI checks that the commit matches the published tag, has the current `main` as its sole parent, and changes only the version number to the value published on RubyGems. Other changes run the full matrix.
 
-To publish, open **Actions → Publish gem to RubyGems → Run workflow**, select `main`, choose the version increment, and click **Run workflow**. Starting from `0.1.1`, choose `patch` for a fix (`0.1.2`), `minor` for a backward-compatible feature (`0.2.0`), or `major` for a breaking change (`1.0.0`). The [latest GitHub Release](https://github.com/feed-mob/request-rescue/releases/latest) lists the next three versions. Enter an optional **Exact version** to override the increment with a higher stable `X.Y.Z` value. Select **Preview versions only** to see the resolved target, current RubyGems version, and all three increments in the run summary. A preview ends before building or publishing.
+Open **Actions → Publish gem to RubyGems → Run workflow** and choose `patch`, `minor`, or `major`. The [latest GitHub Release](https://github.com/feed-mob/request-rescue/releases/latest) lists the three next versions. Enter an optional **Exact version** to override the increment with a higher stable `X.Y.Z` value. The run summary shows the selected version, source version, latest tag, and latest RubyGems version.
 
-The workflow builds the selected version, tests the same gem across the full matrix, and pushes it to RubyGems using trusted publishing.
+| To | Form settings | Result |
+| --- | --- | --- |
+| Rehearse a release | Leave both checkboxes clear (default). | Build the gem, test that package across the full matrix, and retain the artifacts. |
+| Preview the version | Select **Preview versions only**. | Show the calculated versions and finish before building. |
+| Publish | Select `main`, check **Publish the verified gem**, and type `release` in the confirmation field. | Build and verify the package, then publish it using RubyGems trusted publishing. |
+
+Dry runs and previews can run on a feature branch. For example, `gh workflow run release.yml --ref main -f bump=minor` starts a dry run. To publish the minor release, add `-f publish=true -f confirm=release`.
 
 After RubyGems accepts the package, the workflow tags the versioned source commit (for example, `v0.1.1`) and opens a PR to bring that commit into `main`. The workflow starts CI on the version branch automatically. Merge the version update before starting the next release. If recording the release fails after upload, rerun the failed jobs in the original run. When the publish job is retried, it checks the published SHA-256 against the tested package before proceeding.
 
